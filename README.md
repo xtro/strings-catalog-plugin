@@ -71,33 +71,49 @@ Place a configuration file named `StringsCatalogPluginConfig.json` at the root o
 ```
 ---
 
-## Example
+## Usage
 
-Given a catalog entry like:
-
-```
-profile.title
-```
-
-Generated API:
+- Static strings → computed property
 
 ```swift
-Strings.Profile.title
+    // .xcstrings: "home_title" = "Home"
+    let title = L10n.Home.title
 ```
 
-With parameters:
+- Formatted strings → typed functions
 
 ```swift
-Strings.Profile.greeting(name: "Gábor")
+    // .xcstrings: "profile_greeting" = "Hello, %@! You have %d messages."
+    // %@ → String, %d → Int
+    let greeting = L10n.Profile.greeting("John", 3)
+
+    // .xcstrings: "format_price" = "Price: %f USD"
+    // %f → Double
+    let price = L10n.Shop.formatPrice(12.5)
 ```
 
-Plural forms stay honest:
+- Plurals → functions that take an Int (driven by the catalog)
 
 ```swift
-Strings.Cart.items(count: 3)
+    // .xcstrings:
+    //  "inbox_messages_quantity" has plural variations (one/other)
+    //  "one":   "You have %d message"
+    //  "other": "You have %d messages"
+
+    let one = L10n.Inbox.quantity(1)
+    let many = L10n.Inbox.quantity(7)
 ```
 
-If you pass the wrong argument type, the compiler complains before your users do.
+- Dynamic lookup within a scope (if you need it)
+
+```swift
+    // .xcstrings:
+    // Key: "settings_general_about"
+    // Dynamically: "settings_general_\(key.camelCased(with: separator))"
+    if let text = L10n.Settings.General.get("about") {
+      print(text)
+    }
+```
 
 ---
 
