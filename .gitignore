@@ -1,0 +1,50 @@
+# Xcode
+.DS_Store
+build/
+DerivedData/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+*.xcuserstate
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# CocoaPods
+Pods/
+
+# Carthage
+Carthage/Build/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# Other
+.idea/
+*.moved-aside
+*.xcscmblueprint
+*.xccheckout
+*.xcresult
+*.xcarchive
+# Xcode Workspace/Shared
+xcshareddata/
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace/
+
+# App data
+*.iml
+
+# End of file
