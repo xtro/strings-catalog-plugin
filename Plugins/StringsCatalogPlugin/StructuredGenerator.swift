@@ -14,19 +14,23 @@ public final class StructuredGenerator {
             root.insert(key: key)
         }
         
-        var output = """
+        return """
         // Generated using StringsCatalogPlugin
 
         import Foundation
         
         fileprivate let tableName: String = \"\(table)\"
         \(access) enum \(name) {
-
-        """
-        output += render(node: root, level: 1, prefix: [], commentsByKey: commentsByKey, separator: separator, access: access, table: table, pluralKeys: pluralKeys)
-        
-        output += """
+        \(render(node: root, level: 1, prefix: [], commentsByKey: commentsByKey, separator: separator, access: access, table: table, pluralKeys: pluralKeys))
         }
+        
+        fileprivate func translate(base: String, _ key: String) -> String? {
+            let localizableKey = "\\(base)\(separator)\\(key.camelCased(with: "\(separator)"))"
+            let localizedKey = translate(localizableKey)
+            return (localizedKey == localizableKey) ? nil : localizedKey
+        }
+        fileprivate func translate(_ key: String, _ args: CVarArg...) -> String { String(format: translate(key), arguments: args) }
+        fileprivate func translate(_ key: String) -> String { String(localized: String.LocalizationValue(key), table: tableName, bundle: .module) }
         
         fileprivate extension String {
             func camelCased(with separator: Character) -> String {
@@ -37,30 +41,7 @@ public final class StructuredGenerator {
                     .joined()
             }
         }
-        
-        fileprivate func translate(base: String, _ key: String) -> String? {
-            let localizableKey = "\\(base)\(separator)\\(key.camelCased(with: "\(separator)"))"
-            let localizedKey = translate(localizableKey)
-            if localizedKey == localizableKey {
-                return nil
-            }
-            return localizedKey
-        }
-        
-        fileprivate func translate(_ key: String, _ args: CVarArg...) -> String {
-            let format = key.localize(withTable:)(tableName)
-            return String(format: format, arguments: args)
-        }
-        
-        fileprivate extension String {
-            func localize(withTable tableName: String = "") -> String {
-                NSLocalizedString(self, tableName: tableName, value: self, comment: "")
-            }
-        }
-
         """
-        
-        return output
     }
     
     private func typeName(from s: String, separator: String) -> String {
