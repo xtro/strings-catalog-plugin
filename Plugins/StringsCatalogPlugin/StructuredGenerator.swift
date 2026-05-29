@@ -21,23 +21,33 @@ public final class StructuredGenerator {
         
         fileprivate let tableName: String = \"\(table)\"
         \(access) enum \(name) {
+            \(access) static func optionalString(_ key: String) -> String? { translateOptional(key) }
         \(render(node: root, level: 1, prefix: [], commentsByKey: commentsByKey, separator: separator, access: access, table: table, pluralKeys: pluralKeys))
         }
         
         fileprivate func translate(base: String, _ key: String) -> String? {
             let localizableKey = "\\(base)\(separator)\\(key.camelCased(with: "\(separator)"))"
-            let localizedKey = translate(localizableKey)
-            return (localizedKey == localizableKey) ? nil : localizedKey
+            return translateOptional(localizableKey)
+        }
+        fileprivate func translateOptional(_ key: String) -> String? {
+            let localizedKey = translate(key)
+            return (localizedKey == key) ? nil : localizedKey
         }
         fileprivate func translate(_ key: String, _ args: CVarArg...) -> String { String(format: translate(key), arguments: args) }
         fileprivate func translate(_ key: String) -> String { String(localized: String.LocalizationValue(key), table: tableName, bundle: .module) }
         
         fileprivate extension String {
             func camelCased(with separator: Character) -> String {
-                return lowercased()
-                    .split(separator: separator)
+                return split(separator: separator)
                     .enumerated()
-                    .map { $0.offset > 0 ? $0.element.capitalized : $0.element.lowercased() }
+                    .map { index, part in
+                        guard let first = part.first else { return "" }
+                        let rest = part.dropFirst()
+                        if index == 0 {
+                            return String(first).lowercased() + rest
+                        }
+                        return String(first).uppercased() + rest
+                    }
                     .joined()
             }
         }
@@ -64,6 +74,9 @@ public final class StructuredGenerator {
         // keep as-is (already lowerCamel in keys), but replace invalid chars
         result = String(result.map { ($0.isLetter || $0.isNumber) ? $0 : Character(separator) })
         if let f = result.first, f.isNumber { result = separator + result }
+        if let f = result.first, f.isLetter {
+            result = String(f).lowercased() + result.dropFirst()
+        }
         return escapeIfKeywordOrInvalidIdentifier(result)
     }
     
@@ -72,48 +85,66 @@ public final class StructuredGenerator {
         let swiftKeywords: Set<String> = [
             "associatedtype","class","deinit","enum","extension","fileprivate","func","import","init","inout","internal","let","open","operator","private","precedencegroup","protocol","public","rethrows","static","struct","subscript","typealias","var","break","case","continue","default","defer","do","else","fallthrough","for","guard","if","in","repeat","return","switch","where","while","as","Any","catch","false","is","nil","super","self","Self","throw","throws","true","try","_","__COLUMN__","__FILE__","__FUNCTION__","__LINE__" 
         ]
-        var result = name
-        if swiftKeywords.contains(result) {
-            return "`" + result + "`"
+        if swiftKeywords.contains(name) {
+            return "`" + name + "`"
         }
-        return result
+        return name
     }
     
     private enum PlaceholderType {
         case int
         case float
         case string
+        case cString
     }
 
     private func parsePlaceholders(for key: String, comment: String?, pluralKeys: Set<String>) -> [PlaceholderType] {
         let text = (comment ?? "")
-        // Detect explicit placeholders in the comment text
-        let patterns: [(regex: String, type: PlaceholderType)] = [
-            // Strings
-            ("%\\d+\\$@", .string), ("%@", .string),
-            // Integers
-            ("%\\d+\\$d", .int), ("%d", .int),
-            ("%\\d+\\$u", .int), ("%u", .int),
-            ("%\\d+\\$ld", .int), ("%ld", .int),
-            ("%\\d+\\$lld", .int), ("%lld", .int),
-            ("%\\d+\\$x", .int), ("%x", .int),
-            ("%\\d+\\$X", .int), ("%X", .int),
-            ("%\\d+\\$lx", .int), ("%lx", .int),
-            ("%\\d+\\$lX", .int), ("%lX", .int),
-            ("%\\d+\\$o", .int), ("%o", .int),
-            ("%\\d+\\$c", .int), ("%c", .int),
-            // Floats / scientific / general
-            ("%\\d+\\$f", .float), ("%f", .float),
-            ("%\\d+\\$e", .float), ("%e", .float),
-            ("%\\d+\\$E", .float), ("%E", .float),
-            ("%\\d+\\$g", .float), ("%g", .float),
-            ("%\\d+\\$G", .float), ("%G", .float)
-        ]
         var found: [PlaceholderType] = []
-        for (pattern, t) in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-                let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: (text as NSString).length))
-                for _ in matches { found.append(t) }
+
+        let pattern = #"%(?:(\d+)\$)?[-+#0 ]*(?:\*|\d+)?(?:\.(?:\*|\d+))?(?:hh|h|ll|l|L|z|t|j)?([@dDuUxXoOicCfeEgGs])"#
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+            let nsText = text as NSString
+            let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
+            var positional: [Int: PlaceholderType] = [:]
+
+            for match in matches {
+                let percentLocation = match.range.location
+                let nextLocation = match.range.location + match.range.length
+
+                if percentLocation > 0,
+                   nsText.substring(with: NSRange(location: percentLocation - 1, length: 1)) == "%" {
+                    continue
+                }
+                if nextLocation < nsText.length,
+                   nsText.substring(with: NSRange(location: nextLocation, length: 1)) == "%" {
+                    continue
+                }
+
+                let specifier = nsText.substring(with: match.range(at: 2))
+                let type: PlaceholderType
+                switch specifier {
+                case "@":
+                    type = .string
+                case "s":
+                    type = .cString
+                case "f", "e", "E", "g", "G":
+                    type = .float
+                default:
+                    type = .int
+                }
+
+                let positionRange = match.range(at: 1)
+                if positionRange.location != NSNotFound,
+                   let position = Int(nsText.substring(with: positionRange)) {
+                    positional[position] = type
+                } else {
+                    found.append(type)
+                }
+            }
+
+            if !positional.isEmpty {
+                found = positional.keys.sorted().compactMap { positional[$0] }
             }
         }
 
@@ -149,6 +180,9 @@ public final class StructuredGenerator {
             case .string:
                 params.append("_ \(p): Any")
                 callArgs.append("String(describing: \(p))")
+            case .cString:
+                params.append("_ \(p): UnsafePointer<CChar>")
+                callArgs.append(p)
             }
         }
         let sig = "\(access) static func \(name)(\(params.joined(separator: ", "))) -> String"
@@ -264,4 +298,3 @@ public final class StructuredGenerator {
         }
     }
 }
-
