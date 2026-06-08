@@ -38,15 +38,15 @@ public final class StructuredGenerator {
         
         fileprivate extension String {
             func camelCased(with separator: Character) -> String {
-                return split(separator: separator)
+                split(separator: separator)
                     .enumerated()
                     .map { index, part in
-                        guard let first = part.first else { return "" }
-                        let rest = part.dropFirst()
+                        let lowered = part.lowercased()
                         if index == 0 {
-                            return String(first).lowercased() + rest
+                            return lowered
                         }
-                        return String(first).uppercased() + rest
+                        guard let first = lowered.first else { return "" }
+                        return first.uppercased() + lowered.dropFirst()
                     }
                     .joined()
             }
